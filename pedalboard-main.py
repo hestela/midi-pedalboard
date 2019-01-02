@@ -2,7 +2,6 @@
 import RPi.GPIO as GPIO
 import time
 import rtmidi
-import mido
 from functools import partial
 
 class state_obj():
