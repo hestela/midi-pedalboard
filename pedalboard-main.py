@@ -20,6 +20,7 @@ def main():
 
         # GPIO 24 set up as an input, pulled down, connected to 3V3 on button press
         GPIO.setup(4, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        GPIO.setup(17, GPIO.OUT)
 
         # now we'll define two threaded callback functions
         # these will run in another thread when our events are detected
@@ -47,11 +48,13 @@ def main():
                 midiout.send_message(msg_one)
                 state.last_msg_sent = 1
                 state.curr_state = 0
+                GPIO.output(17, GPIO.LOW)
             elif state.curr_state == 2:
                 # send midi message 2
                 midiout.send_message(msg_two)
                 state.last_msg_sent = 2
                 state.curr_state = 0
+                GPIO.output(17, GPIO.HIGH)
 
     except KeyboardInterrupt:
         GPIO.cleanup()       # clean up GPIO on CTRL+C exit
