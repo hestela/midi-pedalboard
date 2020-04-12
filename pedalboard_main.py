@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 import RPi.GPIO as GPIO
 import time
-import rtmidi
 from functools import partial
 from enum import Enum
+from midi_classes import MidiUtil
 
 
 class Song():
@@ -31,9 +31,6 @@ class MusicAction(ButtonAction):
 
     def execute(self):
         pass
-
-class sysExMsg():
-    pass
 
 
 class MidiMsgAction(ButtonAction):
@@ -76,51 +73,33 @@ def button_callback(gpio_to_button, system_state, channel):
 
 
 # options and devices for callback
-class CallBackOpts():
-    def __init__(self, midiin_korg, midiout_korg, midiout_cs, split):
-        self.midiin_korg = midiin_korg
-        self.midiout_korg = midiout_korg
-        self.midiout_cs = midiout_cs
+class MidiCallBackOpts():
+    def __init__(self, high_module, low_module, split):
+        self.high_module = high_module
+        self.low_module = low_module
         self.split = split
 
 
 def midi_callback(msg_time, call_opts):
-    midiout_cs = call_opts.midiout_cs
-    midiout_korg = call_opts.midiout_korg
+    high_module = call_opts.high_module
+    low_module = call_opts.low_module
     new_msg = list(msg_time[0])
 
-    if new_msg[0] is not 145 and new_msg[0] is not 129:
+    if new_msg[0] is not 144 and new_msg[0] is not 128:
         return
 
     if new_msg[1] > call_opts.split:
-        new_msg[0] = (new_msg[0] - 1)
-        midiout_cs.send_message(new_msg)
+        high_module.send_message(new_msg)
     else:
-        midiout_korg.send_message(new_msg)
+        low_module.send_message(new_msg)
+
 
 def main():
     try:
-        my_keyboards = ['microKORG XL:microKORG XL MIDI 2',
-                        'reface CS:reface CS MIDI 1 24'
-                        ]
-        # midiout to just read ports, not used later
-        midiout = rtmidi.MidiOut()
-        midiin_korg = rtmidi.MidiIn()
-        midiout_korg = rtmidi.MidiOut()
-        midiout_cs = rtmidi.MidiOut()
-
-        for index, dev in enumerate(midiout.get_ports()):
-            if my_keyboards[0] in dev:
-                midiout_korg.open_port(index)
-                # Only korg will be input at the moment
-                midiin_korg.open_port(index)
-                print("korg:", dev, index)
-            elif my_keyboards[1] in dev:
-                midiout_cs.open_port(index)
-                print("cs:", dev, index)
-
-        # Disable omni mode on reface CS, channel 16
-        midiout_cs.send_message([191, 0x7C, 0])
+        controllers, modules = MidiUtil.get_midi_devs()
+        if controllers is None or modules is None:
+            print("ERROR: get_midi_devs() failed")
+            return 1
 
         # set the Pi to reference the GPIOs with the BCM convention
         GPIO.setmode(GPIO.BCM)
@@ -148,9 +127,8 @@ def main():
         gpio_out = [12, 13, 16, 17] + list(range(22, 28))
         gpio_to_button = {}
 
-        # State machine (implemented in the infinite while loop) variable
-        system_state = [State.idle]
-
+        # State machine initialize
+        system_state = [State.button_0]
         f = partial(button_callback, gpio_to_button, system_state)
 
         # Setup all pins, create states for input pins
@@ -163,9 +141,9 @@ def main():
             GPIO.setup(gpio, GPIO.OUT, initial=GPIO.LOW)
 
         # Midi callback
-        # TODO: fix split for each button press
-        call_back_opts = CallBackOpts(midiin_korg, midiout_korg, midiout_cs, 60)
-        midiin_korg.set_callback(midi_callback, (call_back_opts))
+        call_back_opts = MidiCallBackOpts(modules[1], modules[0], 60)
+        # FIXME: just using the first controller for now
+        controllers[0].set_callback(midi_callback, (call_back_opts))
 
         # State Machine
         # TODO Add if statements to handle bank buttons
@@ -198,7 +176,6 @@ def main():
     except KeyboardInterrupt:
         print("KeyboardInterrupt")
         GPIO.cleanup()
-        del midiout
     except RuntimeError:
         print("PortNumber for rtmidi is invalid, quitting")
 
