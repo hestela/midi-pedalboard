@@ -7,33 +7,29 @@ class Message():
 
 
 class SoundModule():
-    def __init__(self, port_index, sys_ex_msgs=None):
+    def __init__(self, port_index, init_msgs=None):
         self.midi_port = rtmidi.MidiOut()
         self.midi_port.open_port(port_index)
+
+        if init_msgs:
+            for msg in init_msgs:
+                self.send_message(msg)
 
     def send_message(self, msg):
         self.midi_port.send_message(msg)
 
 
 class Controller():
-    def __init__(self, port_index, sys_ex_msgs=None):
+    def __init__(self, port_index, init_msgs=None):
         self.midi_port = rtmidi.MidiIn()
         self.midi_port.open_port(port_index)
 
-        if sys_ex_msgs:
-            self.local_on_msg = sys_ex_msgs['local_on']
-            self.local_off_msg = sys_ex_msgs['local_off']
+        midi_port_out = rtmidi.MidiOut()
+        midi_port_out.open_port(port_index)
 
-    def set_local_ctrl(self, state):
-        if state:
-            msg = self.local_on_msg
-        else:
-            msg = self.local_off_msg
-
-        self.send_message(msg)
-
-    def send_message(self, msg):
-        self.midi_port.send_message(msg)
+        if init_msgs:
+            for msg in init_msgs:
+                midi_port_out.send_message(msg)
 
     def set_callback(self, call_back_fn, data):
         self.midi_port.set_callback(call_back_fn, data)
@@ -45,8 +41,8 @@ class MidiUtil():
         # FIXME: hardcoded midi devices we wanted
         controller_data = [
             # Controller 1
-            {'port_str':'microKORG XL:microKORG XL MIDI 2',
-             'init_seq': None}
+            {'port_str': 'reface CS:reface CS MIDI 1 24',
+             'init_seq': [[0xF0, 0x43, 0x10, 0x7F, 0x1C, 0x03, 0x00, 0x00, 0x06, 0x00, 0xF7]]}
         ]
         module_data = [
             {'port_str': 'microKORG XL:microKORG XL MIDI 2',
