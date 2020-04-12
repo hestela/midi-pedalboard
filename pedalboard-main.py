@@ -75,14 +75,52 @@ def button_callback(gpio_to_button, system_state, channel):
     system_state[0] = button_to_state[gpio_to_button[channel]]
 
 
+# options and devices for callback
+class CallBackOpts():
+    def __init__(self, midiin_korg, midiout_korg, midiout_cs, split):
+        self.midiin_korg = midiin_korg
+        self.midiout_korg = midiout_korg
+        self.midiout_cs = midiout_cs
+        self.split = split
+
+
+def midi_callback(msg_time, call_opts):
+    midiout_cs = call_opts.midiout_cs
+    midiout_korg = call_opts.midiout_korg
+    new_msg = list(msg_time[0])
+
+    if new_msg[0] is not 145 and new_msg[0] is not 129:
+        return
+
+    if new_msg[1] > call_opts.split:
+        new_msg[0] = (new_msg[0] - 1)
+        midiout_cs.send_message(new_msg)
+    else:
+        midiout_korg.send_message(new_msg)
+
 def main():
     try:
-        # instantiate Midi object
+        my_keyboards = ['microKORG XL:microKORG XL MIDI 2',
+                        'reface CS:reface CS MIDI 1 24'
+                        ]
+        # midiout to just read ports, not used later
         midiout = rtmidi.MidiOut()
+        midiin_korg = rtmidi.MidiIn()
+        midiout_korg = rtmidi.MidiOut()
+        midiout_cs = rtmidi.MidiOut()
 
-        # select the Midi port the device is connected to
-        # FIXME hardcoded '2' for microKORG XL
-        midiout.open_port(2)
+        for index, dev in enumerate(midiout.get_ports()):
+            if my_keyboards[0] in dev:
+                midiout_korg.open_port(index)
+                # Only korg will be input at the moment
+                midiin_korg.open_port(index)
+                print("korg:", dev, index)
+            elif my_keyboards[1] in dev:
+                midiout_cs.open_port(index)
+                print("cs:", dev, index)
+
+        # Disable omni mode on reface CS, channel 16
+        midiout_cs.send_message([191, 0x7C, 0])
 
         # set the Pi to reference the GPIOs with the BCM convention
         GPIO.setmode(GPIO.BCM)
@@ -92,25 +130,14 @@ def main():
         songs = [Song()]
 
         # sysEx message header for reface cs
-        cs_head = [0xF0, 0x43, 0x10, 0x7F, 0x1C, 0x03]
+        #cs_head = [0xF0, 0x43, 0x10, 0x7F, 0x1C, 0x03]
 
         # Fill out song/button info
         # TODO generate this data structure from a xml file
-        songs[0].buttons[0].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x06, 0x01, 0xF7]))
-        songs[0].buttons[0].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x00, 0x00, 0xF7]))
-
-        songs[0].buttons[1].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x06, 0x00, 0xF7]))
-        songs[0].buttons[1].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x00, 0x01, 0xF7]))
-
-        # Old midi messages
-        songs[0].buttons[2].actions.append(MidiMsgAction(midiout, [192, 16]))
-        songs[0].buttons[3].actions.append(MidiMsgAction(midiout, [192, 24]))
-        songs[0].buttons[4].actions.append(MidiMsgAction(midiout, [192, 32]))
-        songs[0].buttons[5].actions.append(MidiMsgAction(midiout, [192, 40]))
-        songs[0].buttons[6].actions.append(MidiMsgAction(midiout, [192, 48]))
-        songs[0].buttons[7].actions.append(MidiMsgAction(midiout, [192, 56]))
-        songs[0].buttons[8].actions.append(MidiMsgAction(midiout, [192, 64]))
-        songs[0].buttons[9].actions.append(MidiMsgAction(midiout, [192, 72]))
+        #songs[0].buttons[0].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x06, 0x01, 0xF7]))
+        #songs[0].buttons[0].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x00, 0x00, 0xF7]))
+        #songs[0].buttons[1].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x06, 0x00, 0xF7]))
+        #songs[0].buttons[1].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x00, 0x01, 0xF7]))
 
         # This list keeps track of the song setup the pedal is currently using
         curr_song = 0
@@ -134,6 +161,11 @@ def main():
             gpio_to_button[index] = gpio
         for gpio in gpio_out:
             GPIO.setup(gpio, GPIO.OUT, initial=GPIO.LOW)
+
+        # Midi callback
+        # TODO: fix split for each button press
+        call_back_opts = CallBackOpts(midiin_korg, midiout_korg, midiout_cs, 60)
+        midiin_korg.set_callback(midi_callback, (call_back_opts))
 
         # State Machine
         # TODO Add if statements to handle bank buttons
