@@ -32,6 +32,9 @@ class MusicAction(ButtonAction):
     def execute(self):
         pass
 
+class sysExMsg():
+    pass
+
 
 class MidiMsgAction(ButtonAction):
     def __init__(self, midiout, message):
@@ -88,10 +91,18 @@ def main():
         # TODO add more songs
         songs = [Song()]
 
+        # sysEx message header for reface cs
+        cs_head = [0xF0, 0x43, 0x10, 0x7F, 0x1C, 0x03]
+
         # Fill out song/button info
         # TODO generate this data structure from a xml file
-        songs[0].buttons[0].actions.append(MidiMsgAction(midiout, [192, 0]))
-        songs[0].buttons[1].actions.append(MidiMsgAction(midiout, [192, 8]))
+        songs[0].buttons[0].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x06, 0x01, 0xF7]))
+        songs[0].buttons[0].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x00, 0x00, 0xF7]))
+
+        songs[0].buttons[1].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x06, 0x00, 0xF7]))
+        songs[0].buttons[1].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x00, 0x01, 0xF7]))
+
+        # Old midi messages
         songs[0].buttons[2].actions.append(MidiMsgAction(midiout, [192, 16]))
         songs[0].buttons[3].actions.append(MidiMsgAction(midiout, [192, 24]))
         songs[0].buttons[4].actions.append(MidiMsgAction(midiout, [192, 32]))
