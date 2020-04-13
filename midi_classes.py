@@ -1,11 +1,20 @@
 import rtmidi
 
 
+class MidiError(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
 class Message():
     def __init__(self, *args, **kwargs):
         pass
 
 
+# Represents the other non-controller midi devices
 class SoundModule():
     def __init__(self, dev_info):
         self.midi_port = rtmidi.MidiOut()
@@ -19,6 +28,7 @@ class SoundModule():
         self.midi_port.send_message(msg)
 
 
+# Represents a controller midi device
 class Controller():
     def __init__(self, dev_info):
         self.midi_port = rtmidi.MidiIn()
@@ -42,15 +52,16 @@ class MidiUtil():
         controller_data = [
             # Controller 1
             {'name': 'reface',
-             'port_str': 'reface CS:reface CS MIDI 1 24',
-             'init_seq': [[0xF0, 0x43, 0x10, 0x7F, 0x1C, 0x03, 0x00, 0x00, 0x06, 0x00, 0xF7]]}
+             'port_str': 'reface CS:reface CS MIDI 1',
+             'init_seq': [[0xF0, 0x43, 0x10, 0x7F, 0x1C, 0x03,
+                           0x00, 0x00, 0x06, 0x00, 0xF7]]}
         ]
         module_data = [
             {'name': 'korg',
              'port_str': 'microKORG XL:microKORG XL MIDI 2',
              'init_seq': []},
             {'name': 'reface',
-             'port_str': 'reface CS:reface CS MIDI 1 24',
+             'port_str': 'reface CS:reface CS MIDI 1',
              'init_seq': []}
         ]
 
@@ -58,21 +69,30 @@ class MidiUtil():
         modules = {}
 
         def get_dev_index(name):
-            # used just read ports, not used afterwards
+            # used only to read ports, not used afterwards
             rtmidi_devs = rtmidi.MidiOut()
             for index, dev in enumerate(rtmidi_devs.get_ports()):
                 if name in dev:
                     return index
+            print("Could not find: %s" % name)
+            return -1
 
-        for dev in controller_data:
-            dev['port_index'] = get_dev_index(dev['port_str'])
-            new_controller = Controller(dev)
-            controllers[dev['name']] = new_controller
+        try:
+            for dev in controller_data:
+                dev['port_index'] = get_dev_index(dev['port_str'])
+                new_controller = Controller(dev)
+                controllers[dev['name']] = new_controller
 
-        for dev in module_data:
-            dev['port_index'] = get_dev_index(dev['port_str'])
-            new_module = SoundModule(dev)
-            modules[dev['name']] = new_module
+            for dev in module_data:
+                dev['port_index'] = get_dev_index(dev['port_str'])
+                new_module = SoundModule(dev)
+                modules[dev['name']] = new_module
+        except OverflowError:
+            raise MidiError('MidiError: No midi devices found')
+
+        # Make sure we got at least one controller and module
+        if len(controllers) is 0 or len(modules) is 0:
+            raise MidiError('Could not initialize midi devices')
 
         # Disable omni mode on reface CS, channel 16
         return controllers, modules

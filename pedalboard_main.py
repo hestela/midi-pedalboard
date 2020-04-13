@@ -3,7 +3,7 @@ import RPi.GPIO as GPIO
 import time
 from functools import partial
 from enum import Enum
-from midi_classes import MidiUtil
+from midi_classes import MidiUtil, MidiError
 
 
 class Song():
@@ -102,10 +102,14 @@ def parse_conf_file(songs, f_name):
         # Song 1
         [
             # Buttons
-            {'midi_msgs': [{'name': 'korg', 'msg': [192, 16]}], 'split_point': 60, 'high': 'reface', 'low': 'korg'},
-            {'midi_msgs': [{'name': 'korg', 'msg': [192, 24]}], 'split_point': 70, 'high': 'korg', 'low': 'reface'},
-            {'midi_msgs': [{'name': 'korg', 'msg': [192, 32]}], 'split_point':  0, 'high': 'korg', 'low': 'reface'},
-            {'midi_msgs': [{'name': 'korg', 'msg': [192, 40]}], 'split_point': 60, 'high': 'reface', 'low': 'reface'}
+            {'midi_msgs': [{'name': 'korg', 'msg': [192, 16]}],
+             'split_point': 60, 'high': 'reface', 'low': 'korg'},
+            {'midi_msgs': [{'name': 'korg', 'msg': [192, 24]}],
+             'split_point': 70, 'high': 'korg', 'low': 'reface'},
+            {'midi_msgs': [{'name': 'korg', 'msg': [192, 32]}],
+             'split_point':  0, 'high': 'korg', 'low': 'reface'},
+            {'midi_msgs': [{'name': 'korg', 'msg': [192, 40]}],
+             'split_point': 60, 'high': 'reface', 'low': 'reface'}
         ]
     ]
 
@@ -121,9 +125,6 @@ def parse_conf_file(songs, f_name):
 def main():
     try:
         controllers, modules = MidiUtil.get_midi_devs()
-        if controllers is None or modules is None:
-            print("ERROR: get_midi_devs() failed")
-            return 1
 
         # set the Pi to reference the GPIOs with the BCM convention
         GPIO.setmode(GPIO.BCM)
@@ -158,7 +159,8 @@ def main():
             GPIO.setup(gpio, GPIO.OUT, initial=GPIO.LOW)
 
         # Midi callback, with defaults
-        call_back_opts = MidiCallBackOpts(modules['korg'], modules['reface'], 60)
+        call_back_opts = MidiCallBackOpts(modules['korg'],
+                                          modules['reface'], 60)
         # FIXME: just using the first controller for now
         controllers['reface'].set_callback(midi_callback, (call_back_opts))
 
@@ -169,9 +171,6 @@ def main():
             if system_state[0] == State.idle:
                 time.sleep(0.0002)
                 continue
-
-            # Service a button press
-            # State Machine can only enter a state other than Idle through the IRQ
 
             # Get button index from system_state
             button_index = system_state[0].value - 1
@@ -194,6 +193,8 @@ def main():
             # Return system state to Idle
             system_state[0] = State.idle
 
+    except MidiError as e:
+        print(e.value)
     except KeyboardInterrupt:
         print("KeyboardInterrupt")
         GPIO.cleanup()
