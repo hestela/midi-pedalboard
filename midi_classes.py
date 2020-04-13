@@ -87,12 +87,9 @@ class MidiUtil():
                 dev['port_index'] = get_dev_index(dev['port_str'])
                 new_module = SoundModule(dev)
                 modules[dev['name']] = new_module
+        # Raised by rtmidi when get_dev_index returns -1
         except OverflowError:
             raise MidiError('MidiError: No midi devices found')
-
-        # Make sure we got at least one controller and module
-        if len(controllers) is 0 or len(modules) is 0:
-            raise MidiError('Could not initialize midi devices')
 
         # Disable omni mode on reface CS, channel 16
         return controllers, modules
