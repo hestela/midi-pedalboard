@@ -9,13 +9,16 @@ from midi_classes import MidiUtil
 class Song():
     def __init__(self):
         self.buttons = []
-        for button in range(0, 11):
+        for button in range(0, 8):
             self.buttons.append(Button())
 
 
 class Button():
     def __init__(self):
-        self.actions = []
+        self.midi_msgs = []
+        self.split_point = 0
+        self.high_module = ''
+        self.low_module = ''
 
 
 class ButtonAction():
@@ -29,7 +32,7 @@ class MusicAction(ButtonAction):
         self.repeat = repeat
         self.stoppable = stoppable
 
-    def execute(self):
+    def send_message(self):
         pass
 
 
@@ -38,7 +41,7 @@ class MidiMsgAction(ButtonAction):
         self.midiout = midiout
         self.message = message
 
-    def execute(self):
+    def send_message(self):
         self.midiout.send_message(self.message)
 
 
@@ -94,6 +97,27 @@ def midi_callback(msg_time, call_opts):
         low_module.send_message(new_msg)
 
 
+def parse_conf_file(songs, f_name):
+    file_data = [
+        # Song 1
+        [
+            # Buttons
+            {'midi_msgs': [{'name': 'korg', 'msg': [192, 16]}], 'split_point': 60, 'high': 'reface', 'low': 'korg'},
+            {'midi_msgs': [{'name': 'korg', 'msg': [192, 24]}], 'split_point': 70, 'high': 'korg', 'low': 'reface'},
+            {'midi_msgs': [{'name': 'korg', 'msg': [192, 32]}], 'split_point':  0, 'high': 'korg', 'low': 'reface'},
+            {'midi_msgs': [{'name': 'korg', 'msg': [192, 40]}], 'split_point': 60, 'high': 'reface', 'low': 'reface'}
+        ]
+    ]
+
+    for i, song in enumerate(file_data):
+        for j, button in enumerate(song):
+            for msg in button['midi_msgs']:
+                songs[i].buttons[j].midi_msgs.append(msg)
+            songs[i].buttons[j].split_point = button['split_point']
+            songs[i].buttons[j].high_module = button['high']
+            songs[i].buttons[j].low_module = button['low']
+
+
 def main():
     try:
         controllers, modules = MidiUtil.get_midi_devs()
@@ -108,15 +132,8 @@ def main():
         # TODO add more songs
         songs = [Song()]
 
-        # sysEx message header for reface cs
-        #cs_head = [0xF0, 0x43, 0x10, 0x7F, 0x1C, 0x03]
-
         # Fill out song/button info
-        # TODO generate this data structure from a xml file
-        #songs[0].buttons[0].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x06, 0x01, 0xF7]))
-        #songs[0].buttons[0].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x00, 0x00, 0xF7]))
-        #songs[0].buttons[1].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x06, 0x00, 0xF7]))
-        #songs[0].buttons[1].actions.append(MidiMsgAction(midiout, cs_head + [0x00, 0x00, 0x00, 0x01, 0xF7]))
+        parse_conf_file(songs, 'dummy.txt')
 
         # This list keeps track of the song setup the pedal is currently using
         curr_song = 0
@@ -140,10 +157,10 @@ def main():
         for gpio in gpio_out:
             GPIO.setup(gpio, GPIO.OUT, initial=GPIO.LOW)
 
-        # Midi callback
-        call_back_opts = MidiCallBackOpts(modules[1], modules[0], 60)
+        # Midi callback, with defaults
+        call_back_opts = MidiCallBackOpts(modules['korg'], modules['reface'], 60)
         # FIXME: just using the first controller for now
-        controllers[0].set_callback(midi_callback, (call_back_opts))
+        controllers['reface'].set_callback(midi_callback, (call_back_opts))
 
         # State Machine
         # TODO Add if statements to handle bank buttons
@@ -167,8 +184,12 @@ def main():
             curr_led_on = gpio_pin
 
             # Excecute through action sequence associated with button
-            for action in songs[curr_song].buttons[button_index].actions:
-                action.execute()
+            curr_button = songs[curr_song].buttons[button_index]
+            for msg in curr_button.midi_msgs:
+                modules[msg['name']].send_message(msg['msg'])
+                call_back_opts.split = curr_button.split_point
+                call_back_opts.high_module = modules[curr_button.high_module]
+                call_back_opts.low_module = modules[curr_button.low_module]
 
             # Return system state to Idle
             system_state[0] = State.idle
