@@ -1,11 +1,16 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
+from __future__ import print_function
 import RPi.GPIO as GPIO
 import time
 from functools import partial
 from enum import Enum
 from midi_classes import MidiUtil, MidiError
 
+gpio_in = range(2, 12)
+gpio_out = [12, 13, 16, 17] + list(range(22, 28))
 
+
+# TODO: move these defs
 class Song():
     def __init__(self):
         self.buttons = []
@@ -59,8 +64,9 @@ class State(Enum):
     button_9 = 10
 
 
-def button_callback(gpio_to_button, system_state, channel):
-    button_to_state = {
+class ButtonCallback():
+    def __init__(self):
+        self.button_to_state = {
             0: State.button_0,
             1: State.button_1,
             2: State.button_2,
@@ -72,29 +78,39 @@ def button_callback(gpio_to_button, system_state, channel):
             8: State.button_8,
             9: State.button_9
             }
-    system_state[0] = button_to_state[gpio_to_button[channel]]
+
+        # Lists of GPIO pins in use
+        self.gpio_to_button = {}
+
+    def __call__(self, system_state, channel):
+        system_state[0] = self.button_to_state[self.gpio_to_button[channel]]
 
 
 # options and devices for callback
-class MidiCallBackOpts():
+class MidiCallBack():
     def __init__(self, high_module, low_module, split):
         self.high_module = high_module
         self.low_module = low_module
         self.split = split
 
+    def __call__(self, midi_msg, data=None):
+        new_msg = list(midi_msg[0])
 
-def midi_callback(msg_time, call_opts):
-    high_module = call_opts.high_module
-    low_module = call_opts.low_module
-    new_msg = list(msg_time[0])
+        if new_msg[0] is not 144 and new_msg[0] is not 128:
+            return
 
-    if new_msg[0] is not 144 and new_msg[0] is not 128:
-        return
+        if new_msg[1] > self.split:
+            self.high_module.send_message(new_msg)
+        else:
+            self.low_module.send_message(new_msg)
 
-    if new_msg[1] > call_opts.split:
-        high_module.send_message(new_msg)
-    else:
-        low_module.send_message(new_msg)
+    def update(self, split=None, high_module=None, low_module=None):
+        if split:
+            self.split = split
+        if high_module:
+            self.high_module = high_module
+        if low_module:
+            self.low_module = low_module
 
 
 def parse_conf_file(songs, f_name):
@@ -122,47 +138,52 @@ def parse_conf_file(songs, f_name):
             songs[i].buttons[j].low_module = button['low']
 
 
+def setup_gpio(system_state):
+    callback = ButtonCallback()
+    f = partial(callback, system_state)
+
+    # set the Pi to reference the GPIOs with the BCM convention
+    GPIO.setmode(GPIO.BCM)
+
+    # Setup all pins, create states for input pins
+    # FIXME: gpio/index is swapped, pull up resister on chan 2/ind 4
+    for gpio, index in enumerate(gpio_in):
+        GPIO.setup(gpio, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.add_event_detect(gpio, GPIO.FALLING,
+                              callback=f, bouncetime=300)
+        callback.gpio_to_button[index] = gpio
+    for gpio in gpio_out:
+        GPIO.setup(gpio, GPIO.OUT, initial=GPIO.LOW)
+
+
 def main():
+    # This list keeps track of the song setup the pedal is currently using
+    curr_song = 0
+    curr_led_on = -1
+
+    # This list holds all the songs
+    # TODO add more songs
+    songs = [Song()]
+
     try:
-        controllers, modules = MidiUtil.get_midi_devs()
-
-        # set the Pi to reference the GPIOs with the BCM convention
-        GPIO.setmode(GPIO.BCM)
-
-        # This list holds all the songs
-        # TODO add more songs
-        songs = [Song()]
-
         # Fill out song/button info
         parse_conf_file(songs, 'dummy.txt')
 
-        # This list keeps track of the song setup the pedal is currently using
-        curr_song = 0
-        curr_led_on = -1
-
-        # Lists of GPIO pins in use
-        gpio_in = range(2, 12)
-        gpio_out = [12, 13, 16, 17] + list(range(22, 28))
-        gpio_to_button = {}
-
         # State machine initialize
         system_state = [State.button_0]
-        f = partial(button_callback, gpio_to_button, system_state)
+        setup_gpio(system_state)
 
-        # Setup all pins, create states for input pins
-        for gpio, index in enumerate(gpio_in):
-            GPIO.setup(gpio, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            GPIO.add_event_detect(gpio, GPIO.FALLING,
-                                  callback=f, bouncetime=300)
-            gpio_to_button[index] = gpio
-        for gpio in gpio_out:
-            GPIO.setup(gpio, GPIO.OUT, initial=GPIO.LOW)
+        controllers, modules = MidiUtil.get_midi_devs()
 
         # Midi callback, with defaults
-        call_back_opts = MidiCallBackOpts(modules['korg'],
-                                          modules['reface'], 60)
+        # FIXME: depends on setup from config
+        # FIXME: remove hardcoded module names
+        default_low = modules['reface']
+        default_high = modules['korg']
+        call_back_opts = MidiCallBack(default_high,
+                                      default_low, 60)
         # FIXME: just using the first controller for now
-        controllers['reface'].set_callback(midi_callback, (call_back_opts))
+        controllers['reface'].set_callback(call_back_opts, None)
 
         # State Machine
         # TODO Add if statements to handle bank buttons
@@ -186,9 +207,10 @@ def main():
             curr_button = songs[curr_song].buttons[button_index]
             for msg in curr_button.midi_msgs:
                 modules[msg['name']].send_message(msg['msg'])
-                call_back_opts.split = curr_button.split_point
-                call_back_opts.high_module = modules[curr_button.high_module]
-                call_back_opts.low_module = modules[curr_button.low_module]
+
+            call_back_opts.update(split=curr_button.split_point,
+                                  high_module=modules[curr_button.high_module],
+                                  low_module=modules[curr_button.low_module])
 
             # Return system state to Idle
             system_state[0] = State.idle

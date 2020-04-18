@@ -68,9 +68,10 @@ class MidiUtil():
         controllers = {}
         modules = {}
 
+        # used only to read ports, not used afterwards
+        rtmidi_devs = rtmidi.MidiOut()
+
         def get_dev_index(name):
-            # used only to read ports, not used afterwards
-            rtmidi_devs = rtmidi.MidiOut()
             for index, dev in enumerate(rtmidi_devs.get_ports()):
                 if name in dev:
                     return index
