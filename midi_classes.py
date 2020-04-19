@@ -82,13 +82,13 @@ class Button():
         self.split_point = 0
         self.high_module = None
         self.low_module = None
+        self.transpose_high = 0
+        self.transpose_low = 0
 
 
 class MidiUtil():
     @staticmethod
     def parse_conf_file(f_name):
-        songs = [Song()]
-
         # FIXME: hardcoded midi devices we wanted
         controller_data = [
             # Controller 1
@@ -122,16 +122,30 @@ class MidiUtil():
                  'split_point':  0, 'high': 'korg', 'low': 'reface'},
                 {'midi_msgs': [{'name': 'korg', 'msg': [192, 40]}],
                  'split_point': 60, 'high': 'reface', 'low': 'reface'}
+            ],
+            # Song 2
+            [
+                {'transpose_high': 6, 'transpose_low': -6,
+                 'split_point': 60, 'high': 'reface', 'low': 'korg'},
+                {'split_point': 60, 'high': 'reface', 'low': 'korg'}
             ]
         ]
+        songs = [Song() for x in range(0, len(file_data))]
 
         for i, song in enumerate(file_data):
             for j, button_data in enumerate(song):
-                for msg in button_data['midi_msgs']:
-                    songs[i].buttons[j].midi_msgs.append(msg)
+                if 'midi_msgs' in button_data:
+                    for msg in button_data['midi_msgs']:
+                        songs[i].buttons[j].midi_msgs.append(msg)
                 songs[i].buttons[j].split_point = button_data['split_point']
                 songs[i].buttons[j].high_module = modules[button_data['high']]
                 songs[i].buttons[j].low_module = modules[button_data['low']]
+                if 'transpose_high' in button_data:
+                    songs[i].buttons[j].transpose_high = \
+                        button_data['transpose_high']
+                if 'transpose_low' in button_data:
+                    songs[i].buttons[j].transpose_low = \
+                        button_data['transpose_low']
 
         return songs, controllers, modules
 

@@ -30,7 +30,7 @@ def setup_gpio(system_state):
 
 def main():
     # This list keeps track of the song setup the pedal is currently using
-    curr_song = 0
+    curr_song = 1
 
     try:
         # Fill out song/button info
@@ -64,6 +64,8 @@ def main():
             GPIO.output(curr_led_on, GPIO.LOW)
             GPIO.output(gpio_pin, GPIO.HIGH)
             curr_led_on = gpio_pin
+
+            # TODO: add clear all notes on new button
 
             # Excecute through action sequence associated with button
             curr_button = songs[curr_song].buttons[button_index]

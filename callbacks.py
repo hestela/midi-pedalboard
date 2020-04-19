@@ -17,6 +17,9 @@ class State(Enum):
 
 class ButtonCallback():
     def __init__(self):
+        # TODO: create button to reset program
+        # TODO: create button to clear all notes
+        # TODO: create button to change songs
         self.button_to_state = {
             0: State.button_0,
             1: State.button_1,
@@ -44,6 +47,11 @@ def midi_callback(midi_msg, data):
         return
 
     if new_msg[1] > data.split_point:
-        data.high_module.send_message(new_msg)
+        # FIXME: need to set for which module
+        new_msg[1] = new_msg[1] + data.transpose_high
+        if new_msg[1] <= 127:
+            data.high_module.send_message(new_msg)
     else:
-        data.low_module.send_message(new_msg)
+        new_msg[1] = new_msg[1] + data.transpose_low
+        if new_msg[1] >= 0:
+            data.low_module.send_message(new_msg)
