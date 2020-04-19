@@ -37,28 +37,13 @@ class ButtonCallback():
         system_state[0] = self.button_to_state[self.gpio_to_button[channel]]
 
 
-# options and devices for callback
-class MidiCallBack():
-    def __init__(self, high_module, low_module, split):
-        self.high_module = high_module
-        self.low_module = low_module
-        self.split = split
+def midi_callback(midi_msg, data):
+    new_msg = list(midi_msg[0])
 
-    def __call__(self, midi_msg, data=None):
-        new_msg = list(midi_msg[0])
+    if new_msg[0] is not 144 and new_msg[0] is not 128:
+        return
 
-        if new_msg[0] is not 144 and new_msg[0] is not 128:
-            return
-
-        if new_msg[1] > self.split:
-            self.high_module.send_message(new_msg)
-        else:
-            self.low_module.send_message(new_msg)
-
-    def update(self, split=None, high_module=None, low_module=None):
-        if split:
-            self.split = split
-        if high_module:
-            self.high_module = high_module
-        if low_module:
-            self.low_module = low_module
+    if new_msg[1] > data.split_point:
+        data.high_module.send_message(new_msg)
+    else:
+        data.low_module.send_message(new_msg)

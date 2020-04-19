@@ -1,6 +1,30 @@
 import rtmidi
 
 
+class ButtonAction():
+    def execute(self):
+        pass
+
+
+class MusicAction(ButtonAction):
+    def __init__(self, file_path, repeat, stoppable):
+        self.file_path = file_path
+        self.repeat = repeat
+        self.stoppable = stoppable
+
+    def send_message(self):
+        pass
+
+
+class MidiMsgAction(ButtonAction):
+    def __init__(self, midiout, message):
+        self.midiout = midiout
+        self.message = message
+
+    def send_message(self):
+        self.midiout.send_message(self.message)
+
+
 class MidiError(Exception):
     def __init__(self, value):
         self.value = value
@@ -45,9 +69,26 @@ class Controller():
         self.midi_port.set_callback(call_back_fn, data)
 
 
+class Song():
+    def __init__(self):
+        self.buttons = []
+        for button in range(0, 8):
+            self.buttons.append(Button())
+
+
+class Button():
+    def __init__(self):
+        self.midi_msgs = []
+        self.split_point = 0
+        self.high_module = None
+        self.low_module = None
+
+
 class MidiUtil():
     @staticmethod
-    def get_midi_devs():
+    def parse_conf_file(f_name):
+        songs = [Song()]
+
         # FIXME: hardcoded midi devices we wanted
         controller_data = [
             # Controller 1
@@ -65,6 +106,37 @@ class MidiUtil():
              'init_seq': []}
         ]
 
+        controllers, modules = MidiUtil.get_midi_devs(controller_data,
+                                                      module_data)
+
+        # FIXME: static data from file
+        file_data = [
+            # Song 1
+            [
+                # Buttons
+                {'midi_msgs': [{'name': 'korg', 'msg': [192, 16]}],
+                 'split_point': 60, 'high': 'reface', 'low': 'korg'},
+                {'midi_msgs': [{'name': 'korg', 'msg': [192, 24]}],
+                 'split_point': 60, 'high': 'korg', 'low': 'reface'},
+                {'midi_msgs': [{'name': 'korg', 'msg': [192, 32]}],
+                 'split_point':  0, 'high': 'korg', 'low': 'reface'},
+                {'midi_msgs': [{'name': 'korg', 'msg': [192, 40]}],
+                 'split_point': 60, 'high': 'reface', 'low': 'reface'}
+            ]
+        ]
+
+        for i, song in enumerate(file_data):
+            for j, button_data in enumerate(song):
+                for msg in button_data['midi_msgs']:
+                    songs[i].buttons[j].midi_msgs.append(msg)
+                songs[i].buttons[j].split_point = button_data['split_point']
+                songs[i].buttons[j].high_module = modules[button_data['high']]
+                songs[i].buttons[j].low_module = modules[button_data['low']]
+
+        return songs, controllers, modules
+
+    @staticmethod
+    def get_midi_devs(controller_data, module_data):
         controllers = {}
         modules = {}
 
