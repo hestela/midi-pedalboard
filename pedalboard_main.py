@@ -18,11 +18,10 @@ def setup_gpio(system_state):
     GPIO.setmode(GPIO.BCM)
 
     # Setup all pins, create states for input pins
-    # FIXME: gpio/index is swapped, pull up resister on chan 2/ind 4
     for index, gpio in enumerate(gpio_in):
         GPIO.setup(gpio, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.add_event_detect(gpio, GPIO.FALLING,
-                              callback=f, bouncetime=300)
+                              callback=f, bouncetime=170)
         callback.gpio_to_button[gpio] = index
     for gpio in gpio_out:
         GPIO.setup(gpio, GPIO.OUT, initial=GPIO.LOW)
@@ -51,6 +50,9 @@ def main():
 
         # State Machine
         # TODO Add if statements to handle bank buttons
+        time_ceil = 0.9
+        last_button_time = time.time()
+        button_index = State.button_0
         while True:
             # Idle state
             if system_state[0] == State.idle:
@@ -64,13 +66,26 @@ def main():
                     curr_song = (curr_song - 1) % num_songs
 
             # Get button index from system_state
+            last_button = button_index
             button_index = system_state[0].value - 1
-            gpio_pin = gpio_out[button_index]
 
             # Ignore button if it is not programmed in this song
             if songs[curr_song].buttons[button_index] is None:
                 system_state[0] = State.idle
                 continue
+
+            curr_time = time.time()
+            time_diff = curr_time - last_button_time
+
+            # Check for double press to go to first song
+            if last_button == button_index \
+                    and time_diff <= time_ceil:
+                curr_song = 0
+                system_state[0] = State.button_0
+                button_index = State.button_0.value - 1
+
+            last_button_time = curr_time
+            gpio_pin = gpio_out[button_index]
 
             # Turn on respective LED, turn off last LED
             GPIO.output(curr_led_on, GPIO.LOW)
