@@ -30,7 +30,7 @@ def setup_gpio(system_state):
 
 def main():
     # This list keeps track of the song setup the pedal is currently using
-    curr_song = 1
+    curr_song = 0
 
     try:
         # Fill out song/button info
@@ -40,6 +40,7 @@ def main():
         system_state = [State.button_0]
         curr_led_on = gpio_out[0]
         setup_gpio(system_state)
+        num_songs = len(songs)
 
         # Midi callback, with defaults
         # FIXME: depends on setup from config
@@ -55,10 +56,21 @@ def main():
             if system_state[0] == State.idle:
                 time.sleep(0.0002)
                 continue
+            elif system_state[0].value >= State.bank_up.value:
+                system_state[0] = State.button_0
+                if system_state[0] == State.bank_up:
+                    curr_song = (curr_song + 1) % num_songs
+                else:
+                    curr_song = (curr_song - 1) % num_songs
 
             # Get button index from system_state
             button_index = system_state[0].value - 1
             gpio_pin = gpio_out[button_index]
+
+            # Ignore button if it is not programmed in this song
+            if songs[curr_song].buttons[button_index] is None:
+                system_state[0] = State.idle
+                continue
 
             # Turn on respective LED, turn off last LED
             GPIO.output(curr_led_on, GPIO.LOW)

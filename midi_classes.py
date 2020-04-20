@@ -33,6 +33,14 @@ class MidiError(Exception):
         return repr(self.value)
 
 
+class ConfError(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
 class Message():
     def __init__(self, *args, **kwargs):
         pass
@@ -70,10 +78,10 @@ class Controller():
 
 
 class Song():
-    def __init__(self):
+    def __init__(self, num_buttons):
         self.buttons = []
-        for button in range(0, 8):
-            self.buttons.append(Button())
+        for button in range(0, num_buttons):
+            self.buttons.append(None)
 
 
 class Button():
@@ -110,7 +118,7 @@ class MidiUtil():
                                                       module_data)
 
         # FIXME: static data from file
-        file_data = [
+        song_data = [
             # Song 1
             [
                 # Buttons
@@ -130,10 +138,20 @@ class MidiUtil():
                 {'split_point': 60, 'high': 'reface', 'low': 'korg'}
             ]
         ]
-        songs = [Song() for x in range(0, len(file_data))]
+        songs = []
 
-        for i, song in enumerate(file_data):
-            for j, button_data in enumerate(song):
+        hw_info = {
+            'num_buttons': 8
+        }
+        num_buttons = hw_info['num_buttons']
+
+        for i in range(0, len(song_data)):
+            songs.append(Song(num_buttons))
+            for j, button_data in enumerate(song_data[i]):
+                if j >= num_buttons:
+                    break
+
+                songs[i].buttons[j] = Button()
                 if 'midi_msgs' in button_data:
                     for msg in button_data['midi_msgs']:
                         songs[i].buttons[j].midi_msgs.append(msg)

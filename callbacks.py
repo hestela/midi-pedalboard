@@ -11,8 +11,8 @@ class State(Enum):
     button_5 = 6
     button_6 = 7
     button_7 = 8
-    button_8 = 9
-    button_9 = 10
+    bank_up = 9
+    bank_down = 10
 
 
 class ButtonCallback():
@@ -29,8 +29,8 @@ class ButtonCallback():
             5: State.button_5,
             6: State.button_6,
             7: State.button_7,
-            8: State.button_8,
-            9: State.button_9
+            8: State.bank_up,
+            9: State.bank_down
             }
 
         # Lists of GPIO pins in use
