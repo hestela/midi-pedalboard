@@ -1,0 +1,60 @@
+controllers:
+  -
+    name: "reface"
+    midi_name: "reface CS"
+    setup_messages:
+      # Disable local control
+      - [0xF0, 0x43, 0x10, 0x7F, 0x1C, 0x03, 0x00, 0x00, 0x06, 0x00, 0xF7]
+
+generators:
+  -
+    name: "reface"
+    midi_name: "reface CS"
+  -
+    name: "korg"
+    midi_name: "microKORG XL:microKORG XL MIDI 2"
+
+button_data:
+  # Song 1
+  - buttons:
+      -
+        midi:
+          - "korg"
+          - [192, 16]
+        split: 60
+        high: "reface"
+        low: "korg"
+      -
+        midi:
+          - "korg"
+          - [192, 24]
+        split: 60
+        high: "korg"
+        low: "reface"
+      -
+        midi:
+          - "korg"
+          - [192, 32]
+        split: 0
+        high: "korg"
+        low: "reface"
+      -
+        midi:
+          - "korg"
+          - [192, 40]
+        split: 60
+        high: "reface"
+        low: "reface"
+
+  # Song 2
+  - buttons:
+    -
+      transpose_high: 6
+      transpose_low: -6
+      split: 60
+      high: "reface"
+      low: "korg"
+    -
+      split: 60
+      high: "reface"
+      low: "korg"

@@ -6,11 +6,8 @@ from functools import partial
 from midi_classes import MidiUtil, MidiError
 from callbacks import State, ButtonCallback, midi_callback
 
-gpio_in = range(2, 12)
-gpio_out = [12, 13, 16, 17] + list(range(22, 28))
 
-
-def setup_gpio(system_state):
+def setup_gpio(system_state, gpio_in, gpio_out):
     callback = ButtonCallback()
     f = partial(callback, system_state)
 
@@ -33,12 +30,12 @@ def main():
 
     try:
         # Fill out song/button info
-        songs, controllers, modules = MidiUtil.parse_conf_file('dummy.txt')
+        songs, controllers, modules, hw_info = MidiUtil.parse_conf_file()
 
         # State machine initialize
         system_state = [State.button_0]
-        curr_led_on = gpio_out[0]
-        setup_gpio(system_state)
+        curr_led_on = hw_info['gpio_out'][0]
+        setup_gpio(system_state, hw_info['gpio_in'], hw_info['gpio_out'])
         num_songs = len(songs)
 
         # Midi callback, with defaults
@@ -85,7 +82,7 @@ def main():
                 button_index = State.button_0.value - 1
 
             last_button_time = curr_time
-            gpio_pin = gpio_out[button_index]
+            gpio_pin = hw_info['gpio_out'][button_index]
 
             # Turn on respective LED, turn off last LED
             GPIO.output(curr_led_on, GPIO.LOW)
@@ -96,7 +93,7 @@ def main():
 
             # Excecute through action sequence associated with button
             curr_button = songs[curr_song].buttons[button_index]
-            for msg in curr_button.midi_msgs:
+            for msg in curr_button.midi:
                 modules[msg['name']].send_message(msg['msg'])
 
             controllers['reface'].set_callback(midi_callback, curr_button)

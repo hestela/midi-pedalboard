@@ -1,4 +1,10 @@
 import rtmidi
+import os
+from yaml import load
+try:
+        from yaml import CLoader as Loader
+except ImportError:
+        from yaml import Loader
 
 
 class ButtonAction():
@@ -53,7 +59,7 @@ class SoundModule():
         self.midi_port.open_port(dev_info['port_index'])
         self.name = dev_info['name']
 
-        for msg in dev_info['init_seq']:
+        for msg in dev_info.get('setup_messages', []):
             self.send_message(msg)
 
     def send_message(self, msg):
@@ -70,7 +76,7 @@ class Controller():
         midi_port_out = rtmidi.MidiOut()
         midi_port_out.open_port(dev_info['port_index'])
 
-        for msg in dev_info['init_seq']:
+        for msg in dev_info['setup_messages']:
             midi_port_out.send_message(msg)
 
     def set_callback(self, call_back_fn, data):
@@ -86,7 +92,7 @@ class Song():
 
 class Button():
     def __init__(self):
-        self.midi_msgs = []
+        self.midi = []
         self.split_point = 0
         self.high_module = None
         self.low_module = None
@@ -96,76 +102,53 @@ class Button():
 
 class MidiUtil():
     @staticmethod
-    def parse_conf_file(f_name):
-        # FIXME: hardcoded midi devices we wanted
-        controller_data = [
-            # Controller 1
-            {'name': 'reface',
-             'port_str': 'reface CS:reface CS MIDI 1',
-             'init_seq': [[0xF0, 0x43, 0x10, 0x7F, 0x1C, 0x03,
-                           0x00, 0x00, 0x06, 0x00, 0xF7]]}
-        ]
-        module_data = [
-            {'name': 'korg',
-             'port_str': 'microKORG XL:microKORG XL MIDI 2',
-             'init_seq': []},
-            {'name': 'reface',
-             'port_str': 'reface CS:reface CS MIDI 1',
-             'init_seq': []}
-        ]
+    def parse_conf_file():
+        pwd = os.path.dirname(os.path.realpath(__file__))
+        peripheral_path = os.path.join(pwd, "config", "peripherals.yaml")
+        hardware_path = os.path.join(pwd, "config", "hardware.yaml")
 
-        controllers, modules = MidiUtil.get_midi_devs(controller_data,
-                                                      module_data)
+        with open(peripheral_path, 'r') as f:
+            peripheral_data = load(f, Loader=Loader)
+        with open(hardware_path, 'r') as f:
+            hw_info = load(f, Loader=Loader)
 
-        # FIXME: static data from file
-        song_data = [
-            # Song 1
-            [
-                # Buttons
-                {'midi_msgs': [{'name': 'korg', 'msg': [192, 16]}],
-                 'split_point': 60, 'high': 'reface', 'low': 'korg'},
-                {'midi_msgs': [{'name': 'korg', 'msg': [192, 24]}],
-                 'split_point': 60, 'high': 'korg', 'low': 'reface'},
-                {'midi_msgs': [{'name': 'korg', 'msg': [192, 32]}],
-                 'split_point':  0, 'high': 'korg', 'low': 'reface'},
-                {'midi_msgs': [{'name': 'korg', 'msg': [192, 40]}],
-                 'split_point': 60, 'high': 'reface', 'low': 'reface'}
-            ],
-            # Song 2
-            [
-                {'transpose_high': 6, 'transpose_low': -6,
-                 'split_point': 60, 'high': 'reface', 'low': 'korg'},
-                {'split_point': 60, 'high': 'reface', 'low': 'korg'}
-            ]
-        ]
+        controllers, modules = MidiUtil.get_midi_devs(peripheral_data['controllers'],
+                                                      peripheral_data['generators'])
+
         songs = []
 
-        hw_info = {
-            'num_buttons': 8
-        }
-        num_buttons = hw_info['num_buttons']
+        num_buttons = int(hw_info['num_buttons'])
+        for i, gpio in enumerate(hw_info['gpio_in']):
+            hw_info['gpio_in'][i] = int(gpio)
+        for i, gpio in enumerate(hw_info['gpio_out']):
+            hw_info['gpio_out'][i] = int(gpio)
 
-        for i in range(0, len(song_data)):
+        for i in range(0, len(peripheral_data['button_data'])):
             songs.append(Song(num_buttons))
-            for j, button_data in enumerate(song_data[i]):
+            for j, button_data in enumerate(peripheral_data['button_data'][i]['buttons']):
                 if j >= num_buttons:
                     break
 
                 songs[i].buttons[j] = Button()
-                if 'midi_msgs' in button_data:
-                    for msg in button_data['midi_msgs']:
-                        songs[i].buttons[j].midi_msgs.append(msg)
-                songs[i].buttons[j].split_point = button_data['split_point']
+
+                name = None
+                for msg in button_data.get('midi', []):
+                    if isinstance(msg, str):
+                        name = msg
+                    else:
+                        songs[i].buttons[j].midi.append({'name': name, 'msg': msg})
+
+                songs[i].buttons[j].split_point = int(button_data['split'])
                 songs[i].buttons[j].high_module = modules[button_data['high']]
                 songs[i].buttons[j].low_module = modules[button_data['low']]
                 if 'transpose_high' in button_data:
                     songs[i].buttons[j].transpose_high = \
-                        button_data['transpose_high']
+                        int(button_data['transpose_high'])
                 if 'transpose_low' in button_data:
                     songs[i].buttons[j].transpose_low = \
-                        button_data['transpose_low']
+                        int(button_data['transpose_low'])
 
-        return songs, controllers, modules
+        return songs, controllers, modules, hw_info
 
     @staticmethod
     def get_midi_devs(controller_data, module_data):
@@ -184,12 +167,12 @@ class MidiUtil():
 
         try:
             for dev in controller_data:
-                dev['port_index'] = get_dev_index(dev['port_str'])
+                dev['port_index'] = get_dev_index(dev['midi_name'])
                 new_controller = Controller(dev)
                 controllers[dev['name']] = new_controller
 
             for dev in module_data:
-                dev['port_index'] = get_dev_index(dev['port_str'])
+                dev['port_index'] = get_dev_index(dev['midi_name'])
                 new_module = SoundModule(dev)
                 modules[dev['name']] = new_module
         # Raised by rtmidi when get_dev_index returns -1
