@@ -21,11 +21,10 @@ def main():
 
     try:
         # Fill out song/button info
-        #songs, controllers, modules, hw_info = MidiUtil.parse_conf_file()
+        songs, controllers, modules, hw_info = MidiUtil.parse_conf_file()
 
         # State machine initialize
         system_state = State.idle
-        songs = [0, 0, 0]
         num_songs = len(songs)
 
         # Midi callback, with defaults
@@ -33,13 +32,18 @@ def main():
         # FIXME: remove hardcoded module names
         # FIXME: just using the first controller for now
 
-        #initial_button = songs[0].buttons[0]
-        #controllers['reface'].set_callback(midi_callback, initial_button)
+        initial_button = songs[0].buttons[0]
+        controllers['reface'].set_callback(midi_callback, initial_button)
 
         # State Machine
         # TODO Add if statements to handle bank buttons
         time_ceil = 0.9
         last_button_time = time.time()
+
+        debounce_time = 0.09
+        last_hit = time.time()
+        curr_time = time.time()
+        last_press = -1
 
         # Initialize LEDs to off
         while True:
@@ -47,6 +51,17 @@ def main():
             if system_state == State.idle:
                 # Poll button matrix
                 system_state, button_index = hw.poll_buttons()
+                curr_time = time.time()
+                if button_index == last_press and system_state != State.idle:
+                    if (curr_time - last_hit) > debounce_time:
+                        last_hit = curr_time
+                        last_press = -1
+                        continue
+                elif button_index != last_press:
+                    last_hit = curr_time
+
+                system_state = State.idle
+                last_press = button_index
                 continue
             elif system_state == State.bank_up:
                 curr_song = (curr_song + 1) % num_songs
@@ -61,9 +76,9 @@ def main():
             last_button = button_index
 
             # Ignore button if it is not programmed in this song
-            #if songs[curr_song].buttons[button_index] is None:
-            #    system_state = State.idle
-            #    continue
+            if songs[curr_song].buttons[button_index] is None:
+                system_state = State.idle
+                continue
 
             curr_time = time.time()
             time_diff = curr_time - last_button_time
@@ -83,11 +98,12 @@ def main():
             # TODO: add clear all notes on new button
 
             # Excecute through action sequence associated with button
-            #curr_button = songs[curr_song].buttons[button_index]
-            #for msg in curr_button.midi:
-            #    modules[msg['name']].send_message(msg['msg'])
+            curr_button = songs[curr_song].buttons[button_index]
+            for msg in curr_button.midi:
+                print('sending a message', msg['msg'])
+                modules[msg['name']].send_message(msg['msg'])
 
-            #controllers['reface'].set_callback(midi_callback, curr_button)
+            controllers['reface'].set_callback(midi_callback, curr_button)
 
             # Return system state to Idle
             system_state = State.idle
