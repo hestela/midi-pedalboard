@@ -3,16 +3,9 @@ from enum import Enum
 
 class State(Enum):
     idle = 0
-    button_0 = 1
-    button_1 = 2
-    button_2 = 3
-    button_3 = 4
-    button_4 = 5
-    button_5 = 6
-    button_6 = 7
-    button_7 = 8
-    bank_up = 9
-    bank_down = 10
+    update_button = 1
+    bank_up = 2
+    bank_down = 3
 
 
 class ButtonCallback():
@@ -21,17 +14,8 @@ class ButtonCallback():
         # TODO: create button to clear all notes
         # TODO: create button to change songs
         self.button_to_state = {
-            0: State.button_0,
-            1: State.button_1,
-            2: State.button_2,
-            3: State.button_3,
-            4: State.button_4,
-            5: State.button_5,
-            6: State.button_6,
-            7: State.button_7,
-            8: State.bank_up,
-            9: State.bank_down
             }
+
 
         # Lists of GPIO pins in use
         self.gpio_to_button = {}
